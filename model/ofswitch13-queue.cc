@@ -163,7 +163,7 @@ OFSwitch13Queue::NotifyConstructionCompleted (void)
 
   // We are using a very large queue size for this queue interface. The real
   // check for queue space is performed at DoEnqueue () by the internal queues.
-  SetAttribute ("MaxSize", StringValue ("100Mp"));
+  //SetAttribute ("MaxSize", StringValue ("100Mp"));
 
   // Chain up.
   Queue<Packet>::NotifyConstructionCompleted ();
