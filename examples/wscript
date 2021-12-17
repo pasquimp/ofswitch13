@@ -27,3 +27,6 @@ def build(bld):
 
     obj = bld.create_ns3_program('ofswitch13-single-domain', ['ofswitch13', 'internet-apps'])
     obj.source = 'ofswitch13-single-domain.cc'
+
+    obj = bld.create_ns3_program('ofswitch13-custom-qos-controller', ['ofswitch13', 'netanim'])
+    obj.source = ['ofswitch13-custom-qos-controller/main.cc', 'ofswitch13-custom-qos-controller/custom-qos-controller.cc']
