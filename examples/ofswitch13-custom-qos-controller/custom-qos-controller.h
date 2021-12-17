@@ -63,6 +63,8 @@ private:
 
   void SendStatsPort (Ptr<const RemoteSwitch> swtch);
 
+  virtual ofl_err HandleMultipartReply (struct ofl_msg_multipart_reply_header *msg, Ptr<const RemoteSwitch> swtch, uint32_t xid);
+
   /**
    * Configure the border switch.
    * \param swtch The switch information.

@@ -64,7 +64,7 @@ CustomQosController::GetTypeId (void)
                    MakeDataRateChecker ())
     .AddAttribute ("LinkAggregation",
                    "Enable link aggregation.",
-                   BooleanValue (true),
+                   BooleanValue (false),
                    MakeBooleanAccessor (&CustomQosController::m_linkAggregation),
                    MakeBooleanChecker ())
     .AddAttribute ("ServerIpAddr",
@@ -98,6 +98,39 @@ CustomQosController::SendStatsPort (Ptr<const RemoteSwitch> swtch)
 
 }
 
+ofl_err
+CustomQosController::HandleMultipartReply (struct ofl_msg_multipart_reply_header *msg, Ptr<const RemoteSwitch> swtch, uint32_t xid)
+{
+  NS_LOG_FUNCTION (this << swtch << xid);
+
+  switch (msg->type)
+    {
+      case OFPMP_PORT_STATS:
+      {
+        struct ofl_msg_multipart_reply_port *stat = (struct ofl_msg_multipart_reply_port *) msg;
+        NS_LOG_DEBUG (stat->stats_num);
+
+        uint64_t totalRxBytes, totalTxBytes = 0;
+        for (size_t i = 0; i < stat->stats_num; i++)
+          {
+           NS_LOG_DEBUG (stat->stats[i]->rx_bytes << " rx bytes");
+           totalRxBytes += stat->stats[i]->rx_bytes;
+           totalTxBytes += stat->stats[i]->tx_bytes;
+
+          }
+        // We estimate the switch queue by difference between the total rx bytes and the total tx bytes (are all the ports on the outgoing path?)
+        NS_LOG_DEBUG ("The switch " << swtch->GetDpId () << " has " << totalRxBytes - totalTxBytes << " bytes in queue");
+        break;
+      }
+      default:
+      {
+        return -1;
+      }
+    }
+
+  ofl_msg_free ((struct ofl_msg_header *) msg, 0);
+  return 0;
+}
 
 ofl_err
 CustomQosController::HandlePacketIn (
