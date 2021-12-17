@@ -21,6 +21,7 @@
 #include "custom-qos-controller.h"
 #include <ns3/network-module.h>
 #include <ns3/internet-module.h>
+#include <ns3/simulator.h>
 
 NS_LOG_COMPONENT_DEFINE ("CustomQosController");
 NS_OBJECT_ENSURE_REGISTERED (CustomQosController);
@@ -85,6 +86,19 @@ CustomQosController::GetTypeId (void)
   return tid;
 }
 
+void
+CustomQosController::SendStatsPort (Ptr<const RemoteSwitch> swtch)
+{
+  NS_LOG_FUNCTION (this << swtch);
+
+  DpctlExecute (swtch, "stats-port");
+
+  // After sending the stats-port, reschedule itself
+  Simulator::Schedule (Seconds (1), &CustomQosController::SendStatsPort, this, swtch);
+
+}
+
+
 ofl_err
 CustomQosController::HandlePacketIn (
   struct ofl_msg_packet_in *msg, Ptr<const RemoteSwitch> swtch,
@@ -137,6 +151,14 @@ CustomQosController::HandshakeSuccessful (Ptr<const RemoteSwitch> swtch)
     {
       ConfigureAggregationSwitch (swtch);
     }
+
+  // For test purposes, after the handshake we send the stats-port req (only to aggregation switch)
+  if (swtch->GetDpId () == 2)
+    {
+      // The schedule parameters are: delay, funtion, object ref, function input parameters
+      Simulator::Schedule (Seconds (1), &CustomQosController::SendStatsPort, this, swtch);
+    }
+
 }
 
 void

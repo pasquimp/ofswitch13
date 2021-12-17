@@ -60,6 +60,9 @@ protected:
   void HandshakeSuccessful (Ptr<const RemoteSwitch> swtch);
 
 private:
+
+  void SendStatsPort (Ptr<const RemoteSwitch> swtch);
+
   /**
    * Configure the border switch.
    * \param swtch The switch information.
