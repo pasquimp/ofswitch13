@@ -77,6 +77,12 @@ private:
    */
   void ConfigureAggregationSwitch (Ptr<const RemoteSwitch> swtch);
 
+   /**
+   * Configure the 3rdNode switch.
+   * \param swtch The switch information.
+   */
+  void Configure3rdNodeSwitch (Ptr<const RemoteSwitch> swtch);
+  
   /**
    * Handle ARP request messages.
    * \param msg The packet-in message.

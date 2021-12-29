@@ -184,6 +184,10 @@ CustomQosController::HandshakeSuccessful (Ptr<const RemoteSwitch> swtch)
     {
       ConfigureAggregationSwitch (swtch);
     }
+  else if (swtch->GetDpId () == 3)
+    {
+      Configure3rdNodeSwitch (swtch);
+    }
 
   // For test purposes, after the handshake we send the stats-port req (only to aggregation switch)
   if (swtch->GetDpId () == 2)
@@ -275,6 +279,20 @@ CustomQosController::ConfigureAggregationSwitch (Ptr<const RemoteSwitch> swtch)
   // Packets from input port 3 are redirected to group 1
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
                 "in_port=3 write:group=1");
+}
+
+void
+CustomQosController::Configure3rdNodeSwitch (Ptr<const RemoteSwitch> swtch)
+{
+  NS_LOG_FUNCTION (this << swtch);
+
+  // Packets from input port 1 are redirected to port 2
+  DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
+                "in_port=1 write:output=2");
+  
+  // Packets from input port 3 are redirected to port 1
+  DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
+                "in_port=2 write:output=1");
 }
 
 ofl_err

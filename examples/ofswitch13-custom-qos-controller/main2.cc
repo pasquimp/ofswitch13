@@ -34,8 +34,15 @@
  *  +----------+      | Border | ~~~~ | Aggreg |      | Client |      +----------+
  *  +----------+      | Switch | ~~~~ | Switch | ==== | Switch |      +----------+
  *  | Server 1 | ==== +--------+      +--------+      +--------+ ==== | Client N |
- *  +----------+                 2x10            100                  +----------+
- *                               Mbps            Mbps
+ *  +----------+          0      2x10     1      100      2           +----------+
+ *                       |       Mbps     |      Mbps
+ *                       |                | 
+ *                       |                |
+ *                       |   +--------+   |
+ *                        ~~~|        |~~~
+ *                           |        |
+ *                           +--------+
+ *                               3
  **/
 
 #include <ns3/core-module.h>
@@ -98,7 +105,7 @@ main (int argc, char *argv[])
   // Create nodes for servers, switches, controllers and clients
   NodeContainer serverNodes, switchNodes, controllerNodes, clientNodes;
   serverNodes.Create (servers);
-  switchNodes.Create (3);
+  switchNodes.Create (4);
   controllerNodes.Create (2);
   clientNodes.Create (clients);
 
@@ -109,6 +116,7 @@ main (int argc, char *argv[])
   listPosAllocator->Add (Vector (  0, 75, 0));  // Server 1
   listPosAllocator->Add (Vector ( 50, 50, 0));  // Border switch
   listPosAllocator->Add (Vector (100, 50, 0));  // Aggregation switch
+  listPosAllocator->Add (Vector (75, 0, 0));  // 3rd switch
   listPosAllocator->Add (Vector (150, 50, 0));  // Client switch
   listPosAllocator->Add (Vector ( 75, 25, 0));  // QoS controller
   listPosAllocator->Add (Vector (150, 25, 0));  // Learning controller
@@ -124,7 +132,7 @@ main (int argc, char *argv[])
 
   // Create device containers
   NetDeviceContainer serverDevices, clientDevices;
-  NetDeviceContainer switch0Ports, switch1Ports, switch2Ports;
+  NetDeviceContainer switch0Ports, switch1Ports, switch2Ports, switch3Ports;
   NetDeviceContainer link;
 
   // Create two 10Mbps connections between border and aggregation switches
@@ -163,6 +171,19 @@ main (int argc, char *argv[])
       clientDevices.Add (link.Get (0));
       switch2Ports.Add (link.Get (1));
     }
+  
+  // Configure the CsmaHelper for 15Mbps connections
+  csmaHelper.SetChannelAttribute ("DataRate", DataRateValue (DataRate ("15Mbps")));
+
+  // Connect 3rd switchnode to border switch
+  link = csmaHelper.Install (NodeContainer (switchNodes.Get (0), switchNodes.Get (3)));
+  switch0Ports.Add (link.Get (0));
+  switch3Ports.Add (link.Get (1));
+  
+  // Connect 3rd switchnode to aggregation switch
+  link = csmaHelper.Install (NodeContainer (switchNodes.Get (1), switchNodes.Get (3)));
+  switch1Ports.Add (link.Get (0));
+  switch3Ports.Add (link.Get (1));
 
   // Configure OpenFlow QoS controller for border and aggregation switches
   // (#0 and #1) into controller node 0.
@@ -180,6 +201,9 @@ main (int argc, char *argv[])
   OFSwitch13DeviceContainer ofSwitchDevices;
   ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (0), switch0Ports));
   ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (1), switch1Ports));
+
+  ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (3), switch2Ports));
+
   ofQosHelper->CreateOpenFlowChannels ();
 
   // Install OpenFlow switches 2 with learning controller
