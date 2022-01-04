@@ -227,6 +227,9 @@ CustomQosController::ConfigureBorderSwitch (Ptr<const RemoteSwitch> swtch)
                     "weight=0,port=any,group=any set_field=ip_src:10.1.1.1"
                     ",set_field=eth_src:00:00:00:00:00:01,output=1");
     }
+  DpctlExecute (swtch, "group-mod cmd=add,type=ind,group=4 "
+                "weight=0,port=any,group=any set_field=ip_src:10.1.1.1"
+                ",set_field=eth_src:00:00:00:00:00:01,output=5");
 
   // Groups #1 and #2 send traffic to internal servers (ports 3 and 4)
   DpctlExecute (swtch, "group-mod cmd=add,type=ind,group=1 "
@@ -246,9 +249,9 @@ CustomQosController::ConfigureBorderSwitch (Ptr<const RemoteSwitch> swtch)
 
   // TCP packets from servers are sent to the external network through group 3
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=700 "
-                "in_port=3,eth_type=0x0800,ip_proto=6 apply:group=3");
+                "in_port=3,eth_type=0x0800,ip_proto=6 apply:group=4");
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=700 "
-                "in_port=4,eth_type=0x0800,ip_proto=6 apply:group=3");
+                "in_port=4,eth_type=0x0800,ip_proto=6 apply:group=4");
 }
 
 void
@@ -275,6 +278,8 @@ CustomQosController::ConfigureAggregationSwitch (Ptr<const RemoteSwitch> swtch)
                 "in_port=1 write:output=3");
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
                 "in_port=2 write:output=3");
+  DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
+                "in_port=4 write:output=3");
 
   // Packets from input port 3 are redirected to group 1
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "

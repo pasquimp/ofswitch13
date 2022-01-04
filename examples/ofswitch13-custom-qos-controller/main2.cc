@@ -29,18 +29,18 @@
  *                          QoS controller       Learning controller
  *                                |                       |
  *                         +--------------+               |
- *  +----------+           |              |               |           +----------+
+ *  +----------+    p3     |   p1   p1    |               |           +----------+
  *  | Server 0 | ==== +--------+      +--------+      +--------+ ==== | Client 0 |
- *  +----------+      | Border | ~~~~ | Aggreg |      | Client |      +----------+
+ *  +----------+      | Border | ~~~~ | Aggreg | p3   | Client |      +----------+
  *  +----------+      | Switch | ~~~~ | Switch | ==== | Switch |      +----------+
- *  | Server 1 | ==== +--------+      +--------+      +--------+ ==== | Client N |
- *  +----------+          0      2x10     1      100      2           +----------+
- *                       |       Mbps     |      Mbps
+ *  | Server 1 | ==== +--------+p2 p2 +--------+      +--------+ ==== | Client N |
+ *  +----------+    p4    0      2x10     1      100      2           +----------+
+ *                     p5|       Mbps     |p4    Mbps
  *                       |                | 
  *                       |                |
  *                       |   +--------+   |
  *                        ~~~|        |~~~
- *                           |        |
+ *                        p1 |        | p2
  *                           +--------+
  *                               3
  **/
@@ -202,7 +202,7 @@ main (int argc, char *argv[])
   ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (0), switch0Ports));
   ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (1), switch1Ports));
 
-  ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (3), switch2Ports));
+  ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (3), switch3Ports));
 
   ofQosHelper->CreateOpenFlowChannels ();
 
