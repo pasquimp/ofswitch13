@@ -67,6 +67,11 @@ CustomQosController::GetTypeId (void)
                    BooleanValue (false),
                    MakeBooleanAccessor (&CustomQosController::m_linkAggregation),
                    MakeBooleanChecker ())
+    .AddAttribute ("ServerLinkAggregation",
+                   "Enable server link aggregation.",
+                   BooleanValue (false),
+                   MakeBooleanAccessor (&CustomQosController::m_SlinkAggregation),
+                   MakeBooleanChecker ())
     .AddAttribute ("ServerIpAddr",
                    "Server IPv4 address.",
                    AddressValue (Address (Ipv4Address ("10.1.1.1"))),
@@ -188,6 +193,10 @@ CustomQosController::HandshakeSuccessful (Ptr<const RemoteSwitch> swtch)
     {
       Configure3rdNodeSwitch (swtch);
     }
+  else if ((swtch->GetDpId () == 4) || (swtch->GetDpId () == 5))
+    {
+      ConfigureServerSwitch (swtch);
+    }
 
   // For test purposes, after the handshake we send the stats-port req (only to aggregation switch)
   if (swtch->GetDpId () == 2)
@@ -227,17 +236,40 @@ CustomQosController::ConfigureBorderSwitch (Ptr<const RemoteSwitch> swtch)
                     "weight=0,port=any,group=any set_field=ip_src:10.1.1.1"
                     ",set_field=eth_src:00:00:00:00:00:01,output=1");
     }
+
+  // Using group #4 (instead of group #3) for rewriting headers and forwarding packets to clients
   DpctlExecute (swtch, "group-mod cmd=add,type=ind,group=4 "
                 "weight=0,port=any,group=any set_field=ip_src:10.1.1.1"
-                ",set_field=eth_src:00:00:00:00:00:01,output=5");
+                ",set_field=eth_src:00:00:00:00:00:01,output=7");
+
+  DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=700 "
+                "in_port=3,eth_type=0x0800,ip_proto=6 apply:group=3");
+  DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=700 "
+                "in_port=4,eth_type=0x0800,ip_proto=6 apply:group=3");
 
   // Groups #1 and #2 send traffic to internal servers (ports 3 and 4)
-  DpctlExecute (swtch, "group-mod cmd=add,type=ind,group=1 "
-                "weight=0,port=any,group=any set_field=ip_dst:10.1.1.2,"
-                "set_field=eth_dst:00:00:00:00:00:08,output=3");
-  DpctlExecute (swtch, "group-mod cmd=add,type=ind,group=2 "
-                "weight=0,port=any,group=any set_field=ip_dst:10.1.1.3,"
-                "set_field=eth_dst:00:00:00:00:00:0a,output=4");
+  if (m_SlinkAggregation)
+    {
+        DpctlExecute (swtch, "group-mod cmd=add,type=sel,group=1 "
+                    "weight=1,port=any,group=any set_field=ip_dst:10.1.1.2,"
+                    "set_field=eth_dst:00:00:00:00:00:10,output=3 "
+                    "weight=1,port=any,group=any set_field=ip_dst:10.1.1.2,"
+                    "set_field=eth_dst:00:00:00:00:00:10,output=5 ");
+        DpctlExecute (swtch, "group-mod cmd=add,type=sel,group=2 "
+                    "weight=1,port=any,group=any set_field=ip_dst:10.1.1.3,"
+                    "set_field=eth_dst:00:00:00:00:00:12,output=4 "
+                    "weight=1,port=any,group=any set_field=ip_dst:10.1.1.3,"
+                    "set_field=eth_dst:00:00:00:00:00:12,output=6 ");
+    }
+  else
+    {
+      DpctlExecute (swtch, "group-mod cmd=add,type=ind,group=1 "
+                    "weight=0,port=any,group=any set_field=ip_dst:10.1.1.2,"
+                    "set_field=eth_dst:00:00:00:00:00:10,output=3");
+      DpctlExecute (swtch, "group-mod cmd=add,type=ind,group=2 "
+                    "weight=0,port=any,group=any set_field=ip_dst:10.1.1.3,"
+                    "set_field=eth_dst:00:00:00:00:00:12,output=4");
+    }
 
   // Incoming TCP connections (ports 1 and 2) are sent to the controller
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
@@ -247,11 +279,6 @@ CustomQosController::ConfigureBorderSwitch (Ptr<const RemoteSwitch> swtch)
                 "in_port=2,eth_type=0x0800,ip_proto=6,ip_dst=10.1.1.1,"
                 "eth_dst=00:00:00:00:00:01 apply:output=ctrl");
 
-  // TCP packets from servers are sent to the external network through group 3
-  DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=700 "
-                "in_port=3,eth_type=0x0800,ip_proto=6 apply:group=4");
-  DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=700 "
-                "in_port=4,eth_type=0x0800,ip_proto=6 apply:group=4");
 }
 
 void
@@ -298,6 +325,37 @@ CustomQosController::Configure3rdNodeSwitch (Ptr<const RemoteSwitch> swtch)
   // Packets from input port 3 are redirected to port 1
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
                 "in_port=2 write:output=1");
+}
+
+void
+CustomQosController::ConfigureServerSwitch (Ptr<const RemoteSwitch> swtch)
+{
+  NS_LOG_FUNCTION (this << swtch);
+
+  if (m_SlinkAggregation)
+    {
+      // Configure Group #1 for aggregating links 1 and 2
+      DpctlExecute (swtch, "group-mod cmd=add,type=sel,group=1 "
+                    "weight=1,port=any,group=any output=1 "
+                    "weight=1,port=any,group=any output=2");
+    }
+  else
+    {
+      // Configure Group #1 for sending packets only over link 1
+      DpctlExecute (swtch, "group-mod cmd=add,type=ind,group=1 "
+                    "weight=0,port=any,group=any output=1");
+    }
+
+  // Packets from input port 1 and 2 are redirected to port 3
+  DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
+                "in_port=1 write:output=3");
+  DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
+                "in_port=2 write:output=3");
+  
+  // Packets from input port 3 are redirected to port 1
+  DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
+                "in_port=3 write:group=1");
+  
 }
 
 ofl_err

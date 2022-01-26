@@ -82,6 +82,12 @@ private:
    * \param swtch The switch information.
    */
   void Configure3rdNodeSwitch (Ptr<const RemoteSwitch> swtch);
+   
+   /**
+   * Configure the server switch.
+   * \param swtch The switch information.
+   */
+  void ConfigureServerSwitch (Ptr<const RemoteSwitch> swtch);
   
   /**
    * Handle ARP request messages.
@@ -154,6 +160,7 @@ private:
   bool      m_meterEnable;        //!< Enable per-flow mettering
   DataRate  m_meterRate;          //!< Per-flow meter rate
   bool      m_linkAggregation;    //!< Enable link aggregation
+  bool      m_SlinkAggregation;   //!< Enable link aggregation on servers side
 
   /** Map saving <IPv4 address / MAC address> */
   typedef std::map<Ipv4Address, Mac48Address> IpMacMap_t;

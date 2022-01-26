@@ -26,23 +26,25 @@
  *   aggregation switches, balancing traffic among internal servers and
  *   aggregating narrowband links to increase throughput.
  *
- *                          QoS controller       Learning controller
- *                                |                       |
- *                         +--------------+               |
- *  +----------+    p3     |   p1   p1    |               |           +----------+
- *  | Server 0 | ==== +--------+      +--------+      +--------+ ==== | Client 0 |
- *  +----------+      | Border | ~~~~ | Aggreg | p3   | Client |      +----------+
- *  +----------+      | Switch | ~~~~ | Switch | ==== | Switch |      +----------+
- *  | Server 1 | ==== +--------+p2 p2 +--------+      +--------+ ==== | Client N |
- *  +----------+    p4    0      2x10     1      100      2           +----------+
- *                     p5|       Mbps     |p4    Mbps
- *                       |                | 
- *                       |                |
- *                       |   +--------+   |
- *                        ~~~|        |~~~
- *                        p1 |        | p2
- *                           +--------+
- *                               3
+ *                                              QoS controller       Learning controller
+ *                                                    |                       |
+ *                                            +--------------+                |
+ *                                            |              |                |
+ *  +----------+     +--------+p1 10Mbps      |              |                |            +----------+
+ *  | Server 0 | ====|   0    | ~~~~     p3+--------+p1  p1+--------+      +--------+ ==== | Client 0 |
+ *  +----------+   p3|        | ~~~~     p5| Border | ~~~~ | Aggreg | p3   | Client |      +----------+
+ *                   +--------+p2 50Mbps   | Switch | ~~~~ | Switch | ==== | Switch |      +----------+
+ *  +----------+     +--------+p1 10MbPS p4+--------+p2  p2+--------+      +--------+ ==== | Client N |
+ *  | Server 1 | ====|   1    | ~~~~     p6    0      2x10     1      100      2           +----------+                                             +----------+
+ *  +----------+   p3|        | ~~~~         p7|      Mbps      |p4   Mbps      
+ *                   +--------+p2 50Mbps       |                | 
+ *                                             |                |
+ *                                             |   +--------+   |
+ *                                              ~~~|  3rd   |~~~
+ *                                              p1 | Switch | p2
+ *                                                 +--------+
+ *                                   
+ *                                                     3
  **/
 
 #include <ns3/core-module.h>
@@ -54,6 +56,7 @@
 #include <ns3/netanim-module.h>
 #include <ns3/mobility-module.h>
 #include "custom-qos-controller.h"
+#include <ns3/internet-apps-module.h>
 
 using namespace ns3;
 
@@ -105,7 +108,7 @@ main (int argc, char *argv[])
   // Create nodes for servers, switches, controllers and clients
   NodeContainer serverNodes, switchNodes, controllerNodes, clientNodes;
   serverNodes.Create (servers);
-  switchNodes.Create (4);
+  switchNodes.Create (4+servers);
   controllerNodes.Create (2);
   clientNodes.Create (clients);
 
@@ -116,7 +119,7 @@ main (int argc, char *argv[])
   listPosAllocator->Add (Vector (  0, 75, 0));  // Server 1
   listPosAllocator->Add (Vector ( 50, 50, 0));  // Border switch
   listPosAllocator->Add (Vector (100, 50, 0));  // Aggregation switch
-  listPosAllocator->Add (Vector (75, 0, 0));  // 3rd switch
+  listPosAllocator->Add (Vector ( 75,  0, 0));  // 3rd switch
   listPosAllocator->Add (Vector (150, 50, 0));  // Client switch
   listPosAllocator->Add (Vector ( 75, 25, 0));  // QoS controller
   listPosAllocator->Add (Vector (150, 25, 0));  // Learning controller
@@ -132,7 +135,7 @@ main (int argc, char *argv[])
 
   // Create device containers
   NetDeviceContainer serverDevices, clientDevices;
-  NetDeviceContainer switch0Ports, switch1Ports, switch2Ports, switch3Ports;
+  NetDeviceContainer switch0Ports, switch1Ports, switch2Ports, switch3Ports, switch4Ports, switch5Ports;
   NetDeviceContainer link;
 
   // Create two 10Mbps connections between border and aggregation switches
@@ -154,7 +157,7 @@ main (int argc, char *argv[])
   link = csmaHelper.Install (NodeContainer (switchNodes.Get (1), switchNodes.Get (2)));
   switch1Ports.Add (link.Get (0));
   switch2Ports.Add (link.Get (1));
-
+/*
   // Connect servers to border switch
   link = csmaHelper.Install (NodeContainer (serverNodes.Get (0), switchNodes.Get (0)));
   serverDevices.Add (link.Get (0));
@@ -163,17 +166,41 @@ main (int argc, char *argv[])
   link = csmaHelper.Install (NodeContainer (serverNodes.Get (1), switchNodes.Get (0)));
   serverDevices.Add (link.Get (0));
   switch0Ports.Add (link.Get (1));
-
-  // Connect client nodes to client switch
-  for (size_t i = 0; i < clients; i++)
-    {
-      link = csmaHelper.Install (NodeContainer (clientNodes.Get (i), switchNodes.Get (2)));
-      clientDevices.Add (link.Get (0));
-      switch2Ports.Add (link.Get (1));
-    }
+*/
   
   // Configure the CsmaHelper for 15Mbps connections
   csmaHelper.SetChannelAttribute ("DataRate", DataRateValue (DataRate ("15Mbps")));
+
+  // Create two 10Mbps connections between border and server switches
+  csmaHelper.SetChannelAttribute ("DataRate", DataRateValue (DataRate ("10Mbps")));
+
+  link = csmaHelper.Install (NodeContainer (switchNodes.Get (0), switchNodes.Get (4)));
+  switch0Ports.Add (link.Get (0));
+  switch4Ports.Add (link.Get (1));
+
+  link = csmaHelper.Install (NodeContainer (switchNodes.Get (0), switchNodes.Get (5)));
+  switch0Ports.Add (link.Get (0));
+  switch5Ports.Add (link.Get (1));
+
+  // Create two 50Mbps connections between border and server switches
+  csmaHelper.SetChannelAttribute ("DataRate", DataRateValue (DataRate ("50Mbps")));
+
+  link = csmaHelper.Install (NodeContainer (switchNodes.Get (0), switchNodes.Get (4)));
+  switch0Ports.Add (link.Get (0));
+  switch4Ports.Add (link.Get (1));
+
+  link = csmaHelper.Install (NodeContainer (switchNodes.Get (0), switchNodes.Get (5)));
+  switch0Ports.Add (link.Get (0));
+  switch5Ports.Add (link.Get (1));
+
+  // Connect servers to server switch
+  link = csmaHelper.Install (NodeContainer (serverNodes.Get (0), switchNodes.Get (4)));
+  serverDevices.Add (link.Get (0));
+  switch4Ports.Add (link.Get (1));
+
+  link = csmaHelper.Install (NodeContainer (serverNodes.Get (1), switchNodes.Get (5)));
+  serverDevices.Add (link.Get (0));
+  switch5Ports.Add (link.Get (1));
 
   // Connect 3rd switchnode to border switch
   link = csmaHelper.Install (NodeContainer (switchNodes.Get (0), switchNodes.Get (3)));
@@ -184,6 +211,14 @@ main (int argc, char *argv[])
   link = csmaHelper.Install (NodeContainer (switchNodes.Get (1), switchNodes.Get (3)));
   switch1Ports.Add (link.Get (0));
   switch3Ports.Add (link.Get (1));
+
+  // Connect client nodes to client switch
+  for (size_t i = 0; i < clients; i++)
+    {
+      link = csmaHelper.Install (NodeContainer (clientNodes.Get (i), switchNodes.Get (2)));
+      clientDevices.Add (link.Get (0));
+      switch2Ports.Add (link.Get (1));
+    }
 
   // Configure OpenFlow QoS controller for border and aggregation switches
   // (#0 and #1) into controller node 0.
@@ -197,12 +232,13 @@ main (int argc, char *argv[])
   Ptr<OFSwitch13LearningController> learnCtrl = CreateObject<OFSwitch13LearningController> ();
   ofLearningHelper->InstallController (controllerNodes.Get (1), learnCtrl);
 
-  // Install OpenFlow switches 0 and 1 with border controller
+  // Install OpenFlow switches 0,1,3,4 and 5 with border controller
   OFSwitch13DeviceContainer ofSwitchDevices;
   ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (0), switch0Ports));
   ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (1), switch1Ports));
-
   ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (3), switch3Ports));
+  ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (4), switch4Ports));
+  ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (5), switch5Ports));
 
   ofQosHelper->CreateOpenFlowChannels ();
 
@@ -265,7 +301,7 @@ main (int argc, char *argv[])
   anim.SetStartTime (Seconds (0));
   anim.SetStopTime (Seconds (4));
 
-  // Set NetAnim node descriptions
+  /*// Set NetAnim node descriptions
   anim.UpdateNodeDescription (0, "Server 0");
   anim.UpdateNodeDescription (1, "Server 1");
   anim.UpdateNodeDescription (2, "Border switch");
@@ -306,7 +342,7 @@ main (int argc, char *argv[])
         {
           anim.UpdateNodeSize (i, 10, 10);
         }
-    }
+    }*/
 
   // Run the simulation
   Simulator::Stop (Seconds (simTime));
