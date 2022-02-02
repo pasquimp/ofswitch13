@@ -57,6 +57,11 @@ CustomQosController::GetTypeId (void)
                    BooleanValue (false),
                    MakeBooleanAccessor (&CustomQosController::m_meterEnable),
                    MakeBooleanChecker ())
+    .AddAttribute ("EnableEdgeServer",
+                   "Enable Edge-Server1",
+                   BooleanValue (true),
+                   MakeBooleanAccessor (&CustomQosController::routeUp),
+                   MakeBooleanChecker ())
     .AddAttribute ("MeterRate",
                    "Per-flow meter rate.",
                    DataRateValue (DataRate ("256Kbps")),
@@ -193,7 +198,7 @@ CustomQosController::HandshakeSuccessful (Ptr<const RemoteSwitch> swtch)
     {
       Configure3rdNodeSwitch (swtch);
     }
-  else if ((swtch->GetDpId () == 4) || (swtch->GetDpId () == 5))
+  else if ((swtch->GetDpId () == 4) || (swtch->GetDpId () == 5) || (swtch->GetDpId () == 6))
     {
       ConfigureServerSwitch (swtch);
     }
@@ -243,9 +248,9 @@ CustomQosController::ConfigureBorderSwitch (Ptr<const RemoteSwitch> swtch)
                 ",set_field=eth_src:00:00:00:00:00:01,output=7");
 
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=700 "
-                "in_port=3,eth_type=0x0800,ip_proto=6 apply:group=3");
+                "in_port=3,eth_type=0x0800 apply:group=3");
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=700 "
-                "in_port=4,eth_type=0x0800,ip_proto=6 apply:group=3");
+                "in_port=4,eth_type=0x0800 apply:group=3");
 
   // Groups #1 and #2 send traffic to internal servers (ports 3 and 4)
   if (m_SlinkAggregation)
@@ -273,10 +278,10 @@ CustomQosController::ConfigureBorderSwitch (Ptr<const RemoteSwitch> swtch)
 
   // Incoming TCP connections (ports 1 and 2) are sent to the controller
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
-                "in_port=1,eth_type=0x0800,ip_proto=6,ip_dst=10.1.1.1,"
+                "in_port=1,eth_type=0x0800,ip_dst=10.1.1.1,"
                 "eth_dst=00:00:00:00:00:01 apply:output=ctrl");
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
-                "in_port=2,eth_type=0x0800,ip_proto=6,ip_dst=10.1.1.1,"
+                "in_port=2,eth_type=0x0800,ip_dst=10.1.1.1,"
                 "eth_dst=00:00:00:00:00:01 apply:output=ctrl");
 
 }
@@ -285,7 +290,51 @@ void
 CustomQosController::ConfigureAggregationSwitch (Ptr<const RemoteSwitch> swtch)
 {
   NS_LOG_FUNCTION (this << swtch);
+  if(routeUp)
+  {
+      // For packet-in messages, send only the first 128 bytes to the controller
+      DpctlExecute (swtch, "set-config miss=128");
 
+      // Redirect ARP requests to the controller
+      DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=20 "
+                    "eth_type=0x0806,arp_op=1 apply:output=ctrl");
+      
+      // group 3 towards clients
+      DpctlExecute (swtch, "group-mod cmd=add,type=ind,group=3 "
+                    "weight=0,port=any,group=any set_field=ip_src:10.1.1.1"
+                    ",set_field=eth_src:00:00:00:00:00:01,output=3");
+
+      DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=700 "
+                    "in_port=5,eth_type=0x0800 apply:group=3");
+      DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=700 "
+                    "in_port=6,eth_type=0x0800 apply:group=3");
+      
+      // group 1 towards server
+      if (m_SlinkAggregation)
+        {
+          DpctlExecute (swtch, "group-mod cmd=add,type=sel,group=1 "
+                        "weight=1,port=any,group=any set_field=ip_dst:10.1.1.4,"
+                        "set_field=eth_dst:00:00:00:00:00:1c,output=5 "
+                        "weight=1,port=any,group=any set_field=ip_dst:10.1.1.4,"
+                        "set_field=eth_dst:00:00:00:00:00:1c,output=6");
+        }
+      else
+        {
+          DpctlExecute (swtch, "group-mod cmd=add,type=sel,group=1 "
+                        "weight=0,port=any,group=any set_field=ip_dst:10.1.1.4"
+                        ",set_field=eth_dst:00:00:00:00:00:1c,output=5");
+        }
+      
+      DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
+                    "in_port=3 write:group=1");
+
+      // Incoming TCP connections (ports 1 and 2) are sent to the controller
+      DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
+                    "in_port=3,eth_type=0x0800,ip_dst=10.1.1.1,"
+                    "eth_dst=00:00:00:00:00:01 apply:output=ctrl");
+  }
+  else
+  {
   if (m_linkAggregation)
     {
       // Configure Group #1 for aggregating links 1 and 2
@@ -311,6 +360,7 @@ CustomQosController::ConfigureAggregationSwitch (Ptr<const RemoteSwitch> swtch)
   // Packets from input port 3 are redirected to group 1
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
                 "in_port=3 write:group=1");
+  }
 }
 
 void
@@ -352,7 +402,7 @@ CustomQosController::ConfigureServerSwitch (Ptr<const RemoteSwitch> swtch)
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
                 "in_port=2 write:output=3");
   
-  // Packets from input port 3 are redirected to port 1
+  // Packets from input port 3 are redirected to group 1
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
                 "in_port=3 write:group=1");
   
@@ -470,11 +520,30 @@ CustomQosController::HandleConnectionRequest (
 
   // Get source and destination TCP ports
   uint16_t srcPort, dstPort;
-  tlv = oxm_match_lookup (OXM_OF_TCP_SRC, (struct ofl_match*)msg->match);
-  memcpy (&srcPort, tlv->value, OXM_LENGTH (OXM_OF_TCP_SRC));
-  tlv = oxm_match_lookup (OXM_OF_TCP_DST, (struct ofl_match*)msg->match);
-  memcpy (&dstPort, tlv->value, OXM_LENGTH (OXM_OF_TCP_DST));
+  uint32_t ipProto = 0;
 
+  //OXM_OF_IP_PROTO
+  tlv = oxm_match_lookup (OXM_OF_IP_PROTO, (struct ofl_match*)msg->match);
+  memcpy (&ipProto, tlv->value, OXM_LENGTH (OXM_OF_IP_PROTO));
+  if (ipProto == 6) // TCP
+    {
+      tlv = oxm_match_lookup (OXM_OF_TCP_SRC, (struct ofl_match*)msg->match);
+      memcpy (&srcPort, tlv->value, OXM_LENGTH (OXM_OF_TCP_SRC));
+      tlv = oxm_match_lookup (OXM_OF_TCP_DST, (struct ofl_match*)msg->match);
+      memcpy (&dstPort, tlv->value, OXM_LENGTH (OXM_OF_TCP_DST));
+    }
+  else if (ipProto == 17) // UDP
+    {
+      tlv = oxm_match_lookup (OXM_OF_UDP_SRC, (struct ofl_match*)msg->match);
+      memcpy (&srcPort, tlv->value, OXM_LENGTH (OXM_OF_UDP_SRC));
+      tlv = oxm_match_lookup (OXM_OF_UDP_DST, (struct ofl_match*)msg->match);
+      memcpy (&dstPort, tlv->value, OXM_LENGTH (OXM_OF_UDP_DST));
+    }
+  else if (ipProto == 1) // ICMP
+    {
+
+    }
+  
   // Create an ARP request for further address resolution
   SaveArpEntry (srcIp, srcMac);
   uint8_t replyData[64];
@@ -502,9 +571,11 @@ CustomQosController::HandleConnectionRequest (
   free (arpAction);
 
   // Check for valid service connection request
-  NS_ASSERT_MSG ((dstIp == serverIp) && (dstPort == m_serverTcpPort),
-                 "Invalid IP address / TCP port.");
-
+  if (ipProto == 6 || ipProto == 17)
+    {
+      NS_ASSERT_MSG ((dstIp == serverIp) && (dstPort == m_serverTcpPort),
+                    "Invalid IP address / TCP port.");
+    }
   // Select an internal server to handle this connection
   uint16_t serverNumber = 1 + (connectionCounter % 2);
   NS_LOG_INFO ("Connection " << connectionCounter <<
@@ -519,20 +590,51 @@ CustomQosController::HandleConnectionRequest (
       DpctlExecute (swtch, meterCmd.str ());
     }
 
-  // Install the flow entry for this TCP connection
-  std::ostringstream flowCmd;
-  flowCmd << "flow-mod cmd=add,table=0,prio=1000 eth_type=0x0800,ip_proto=6"
-          << ",ip_src=" << srcIp
-          << "ip_dst=" << m_serverIpAddress
-          << ",tcp_dst=" << m_serverTcpPort
-          << ",tcp_src=" << srcPort;
-  if (m_meterEnable)
+  if (ipProto == 6)
     {
-      flowCmd << " meter:" << connectionCounter;
+      // Install the flow entry for this TCP connection
+      std::ostringstream flowCmd;
+      flowCmd << "flow-mod cmd=add,table=0,prio=1000 eth_type=0x0800,ip_proto=6"
+              << ",ip_src=" << srcIp
+              << "ip_dst=" << m_serverIpAddress
+              << ",tcp_dst=" << m_serverTcpPort
+              << ",tcp_src=" << srcPort;
+      if (m_meterEnable)
+        {
+          flowCmd << " meter:" << connectionCounter;
+        }
+      flowCmd << " write:group=" << serverNumber;
+      DpctlExecute (swtch, flowCmd.str ());
     }
-  flowCmd << " write:group=" << serverNumber;
-  DpctlExecute (swtch, flowCmd.str ());
-
+  else if (ipProto == 17)
+    {
+      // Install the flow entry for this TCP connection
+      std::ostringstream flowCmd2;
+      flowCmd2 << "flow-mod cmd=add,table=0,prio=1000 eth_type=0x0800,ip_proto=17"
+              << ",ip_src=" << srcIp
+              << "ip_dst=" << m_serverIpAddress
+              << ",udp_dst=" << m_serverTcpPort
+              << ",udp_src=" << srcPort;
+      if (m_meterEnable)
+        {
+          flowCmd2 << " meter:" << connectionCounter;
+        }
+      flowCmd2 << " write:group=" << serverNumber;
+      DpctlExecute (swtch, flowCmd2.str ());
+    }
+  else if (ipProto == 1)
+    {
+      std::ostringstream flowCmd3;
+      flowCmd3 << "flow-mod cmd=add,table=0,prio=1000 eth_type=0x0800,ip_proto=1"
+              << ",ip_src=" << srcIp
+              << "ip_dst=" << m_serverIpAddress;
+      if (m_meterEnable)
+        {
+          flowCmd3 << " meter:" << connectionCounter;
+        }
+      flowCmd3 << " write:group=" << serverNumber;
+      DpctlExecute (swtch, flowCmd3.str ());
+    }
   // Create group action with server number
   struct ofl_action_group *action =
     (struct ofl_action_group*)xmalloc (sizeof (struct ofl_action_group));

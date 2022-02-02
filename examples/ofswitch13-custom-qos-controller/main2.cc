@@ -26,17 +26,17 @@
  *   aggregation switches, balancing traffic among internal servers and
  *   aggregating narrowband links to increase throughput.
  *
- *                                              QoS controller       Learning controller
- *                                                    |                       |
- *                                            +--------------+                |
- *                                            |              |                |
- *  +----------+     +--------+p1 10Mbps      |              |                |            +----------+
- *  | Server 0 | ====|   0    | ~~~~     p3+--------+p1  p1+--------+      +--------+ ==== | Client 0 |
- *  +----------+   p3|        | ~~~~     p5| Border | ~~~~ | Aggreg | p3   | Client |      +----------+
- *                   +--------+p2 50Mbps   | Switch | ~~~~ | Switch | ==== | Switch |      +----------+
- *  +----------+     +--------+p1 10MbPS p4+--------+p2  p2+--------+      +--------+ ==== | Client N |
- *  | Server 1 | ====|   1    | ~~~~     p6    0      2x10     1      100      2           +----------+                                             +----------+
- *  +----------+   p3|        | ~~~~         p7|      Mbps      |p4   Mbps      
+ *                                              QoS controller    +----------+        Learning controller
+ *                                                    |           |EdgeServer|            |
+ *                                            +--------------+    +----------+            |
+ *                                            |              |        || +--------+       |
+ *  +----------+     +--------+p1 10Mbps      |              |_________==| Server |       |           +----------+
+ *  | Server 0 | ====|   0    | ~~~~     p3+--------+p1  p1+------p4+ ===| Switch |   +--------+ ==== | Client 0 |
+ *  +----------+   p3|        | ~~~~     p5| Border | ~~~~ | Aggreg |  p1+--------+   | Client |      +----------+
+ *                   +--------+p2 50Mbps   | Switch | ~~~~ | Switch | =============== | Switch |      +----------+
+ *  +----------+     +--------+p1 10MbPS p4+--------+p2  p2+--------+ p3              +--------+ ==== | Client N |
+ *  | Server 1 | ====|   1    | ~~~~     p6    0      2x10     1          100             2           +----------+                                             +----------+
+ *  +----------+   p3|        | ~~~~         p7|      Mbps      |p4       Mbps      
  *                   +--------+p2 50Mbps       |                | 
  *                                             |                |
  *                                             |   +--------+   |
@@ -60,11 +60,18 @@
 
 using namespace ns3;
 
+static void PingRtt (std::string context, Time rtt)
+{
+  std::cout << context << "=" << rtt.GetMilliSeconds () << " ms" << std::endl;
+}
+
 int
 main (int argc, char *argv[])
 {
+  ofs::EnableLibraryLog (true, "switchlog");
+
   uint16_t clients = 2;
-  uint16_t servers = 2;
+  uint16_t servers = 3;
   uint16_t simTime = 10;
   bool verbose = false;
   bool trace = false;
@@ -111,7 +118,7 @@ main (int argc, char *argv[])
   switchNodes.Create (4+servers);
   controllerNodes.Create (2);
   clientNodes.Create (clients);
-
+  /*
   // Setting node positions for NetAnim support
   Ptr<ListPositionAllocator> listPosAllocator;
   listPosAllocator = CreateObject<ListPositionAllocator> ();
@@ -132,10 +139,10 @@ main (int argc, char *argv[])
   mobilityHelper.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobilityHelper.SetPositionAllocator (listPosAllocator);
   mobilityHelper.Install (NodeContainer (serverNodes, switchNodes, controllerNodes, clientNodes));
-
+  */
   // Create device containers
   NetDeviceContainer serverDevices, clientDevices;
-  NetDeviceContainer switch0Ports, switch1Ports, switch2Ports, switch3Ports, switch4Ports, switch5Ports;
+  NetDeviceContainer switch0Ports, switch1Ports, switch2Ports, switch3Ports, switch4Ports, switch5Ports, switch6Ports;
   NetDeviceContainer link;
 
   // Create two 10Mbps connections between border and aggregation switches
@@ -143,20 +150,20 @@ main (int argc, char *argv[])
   csmaHelper.SetChannelAttribute ("DataRate", DataRateValue (DataRate ("10Mbps")));
 
   link = csmaHelper.Install (NodeContainer (switchNodes.Get (0), switchNodes.Get (1)));
-  switch0Ports.Add (link.Get (0));
-  switch1Ports.Add (link.Get (1));
+  switch0Ports.Add (link.Get (0)); // 1
+  switch1Ports.Add (link.Get (1)); // 2
 
   link = csmaHelper.Install (NodeContainer (switchNodes.Get (0), switchNodes.Get (1)));
-  switch0Ports.Add (link.Get (0));
-  switch1Ports.Add (link.Get (1));
+  switch0Ports.Add (link.Get (0)); // 3
+  switch1Ports.Add (link.Get (1)); // 4
 
   // Configure the CsmaHelper for 100Mbps connections
   csmaHelper.SetChannelAttribute ("DataRate", DataRateValue (DataRate ("100Mbps")));
 
   // Connect aggregation switch to client switch
   link = csmaHelper.Install (NodeContainer (switchNodes.Get (1), switchNodes.Get (2)));
-  switch1Ports.Add (link.Get (0));
-  switch2Ports.Add (link.Get (1));
+  switch1Ports.Add (link.Get (0)); // 5
+  switch2Ports.Add (link.Get (1)); // 6
 /*
   // Connect servers to border switch
   link = csmaHelper.Install (NodeContainer (serverNodes.Get (0), switchNodes.Get (0)));
@@ -167,10 +174,6 @@ main (int argc, char *argv[])
   serverDevices.Add (link.Get (0));
   switch0Ports.Add (link.Get (1));
 */
-  
-  // Configure the CsmaHelper for 15Mbps connections
-  csmaHelper.SetChannelAttribute ("DataRate", DataRateValue (DataRate ("15Mbps")));
-
   // Create two 10Mbps connections between border and server switches
   csmaHelper.SetChannelAttribute ("DataRate", DataRateValue (DataRate ("10Mbps")));
 
@@ -193,15 +196,18 @@ main (int argc, char *argv[])
   switch0Ports.Add (link.Get (0));
   switch5Ports.Add (link.Get (1));
 
-  // Connect servers to server switch
+  // Connect core servers to core server switch
   link = csmaHelper.Install (NodeContainer (serverNodes.Get (0), switchNodes.Get (4)));
-  serverDevices.Add (link.Get (0));
-  switch4Ports.Add (link.Get (1));
+  serverDevices.Add (link.Get (0)); // device 15 (0f)
+  switch4Ports.Add (link.Get (1));  // device 16  (10)
 
   link = csmaHelper.Install (NodeContainer (serverNodes.Get (1), switchNodes.Get (5)));
-  serverDevices.Add (link.Get (0));
-  switch5Ports.Add (link.Get (1));
+  serverDevices.Add (link.Get (0)); // device 17 (11)
+  switch5Ports.Add (link.Get (1));  // device 18 (12)
 
+  // Configure the CsmaHelper for 15Mbps connections
+  csmaHelper.SetChannelAttribute ("DataRate", DataRateValue (DataRate ("15Mbps")));
+  
   // Connect 3rd switchnode to border switch
   link = csmaHelper.Install (NodeContainer (switchNodes.Get (0), switchNodes.Get (3)));
   switch0Ports.Add (link.Get (0));
@@ -211,6 +217,27 @@ main (int argc, char *argv[])
   link = csmaHelper.Install (NodeContainer (switchNodes.Get (1), switchNodes.Get (3)));
   switch1Ports.Add (link.Get (0));
   switch3Ports.Add (link.Get (1));
+
+  // Configure the CsmaHelper for 10Mbps connections
+  csmaHelper.SetChannelAttribute ("DataRate", DataRateValue (DataRate ("10Mbps")));
+
+  // Connect edge server switch to aggregation switch
+  link = csmaHelper.Install (NodeContainer (switchNodes.Get (1), switchNodes.Get (6)));
+  switch1Ports.Add (link.Get (0)); // p5 on switch 1
+  switch6Ports.Add (link.Get (1)); // p1 on switch 6
+
+  // Configure the CsmaHelper for 50Mbps connections
+  csmaHelper.SetChannelAttribute ("DataRate", DataRateValue (DataRate ("50Mbps")));
+
+  // Connect edge server switch to aggregation switch
+  link = csmaHelper.Install (NodeContainer (switchNodes.Get (1), switchNodes.Get (6)));
+  switch1Ports.Add (link.Get (0)); // p6
+  switch6Ports.Add (link.Get (1)); // p2
+
+  // Connect edge server to edge server switch (6 instead of 1)
+  link = csmaHelper.Install (NodeContainer (serverNodes.Get (2), switchNodes.Get (6)));
+  serverDevices.Add (link.Get (0)); // device 27 (1b)
+  switch6Ports.Add (link.Get (1)); // p3, device 28 (1c)
 
   // Connect client nodes to client switch
   for (size_t i = 0; i < clients; i++)
@@ -239,6 +266,7 @@ main (int argc, char *argv[])
   ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (3), switch3Ports));
   ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (4), switch4Ports));
   ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (5), switch5Ports));
+  ofSwitchDevices.Add (ofQosHelper->InstallSwitch (switchNodes.Get (6), switch6Ports));
 
   ofQosHelper->CreateOpenFlowChannels ();
 
@@ -271,8 +299,16 @@ main (int argc, char *argv[])
   sinkApps.Start (Seconds (0));
 
   // Installing a sender application at client nodes
-  BulkSendHelper senderHelper ("ns3::TcpSocketFactory", InetSocketAddress (serverAddr, 9));
-  ApplicationContainer senderApps = senderHelper.Install (clientNodes);
+  //BulkSendHelper senderHelper ("ns3::TcpSocketFactory", InetSocketAddress (serverAddr, 9));
+  //ApplicationContainer senderApps = senderHelper.Install (clientNodes);
+
+  OnOffHelper onOffHelper ("ns3::TcpSocketFactory", Address ());
+  onOffHelper.SetAttribute ("Remote", AddressValue (InetSocketAddress (serverAddr, 9)));
+  onOffHelper.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1]"));
+  onOffHelper.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
+  onOffHelper.SetAttribute ("PacketSize", UintegerValue (1000));
+  onOffHelper.SetAttribute ("DataRate", StringValue ("10Mbps"));
+  ApplicationContainer senderApps = onOffHelper.Install (clientNodes);
 
   // Get random start times
   Ptr<UniformRandomVariable> rngStart = CreateObject<UniformRandomVariable> ();
@@ -283,6 +319,12 @@ main (int argc, char *argv[])
     {
       (*appIt)->SetStartTime (Seconds (rngStart->GetValue ()));
     }
+
+  // Configure and install ping
+  V4PingHelper ping = V4PingHelper (serverAddr);
+  ping.Install (clientNodes.Get(0));
+
+  Config::Connect ("/NodeList/*/ApplicationList/*/$ns3::V4Ping/Rtt", MakeCallback (&PingRtt));
 
   // Enable pcap traces and datapath stats
   if (trace)
@@ -296,12 +338,12 @@ main (int argc, char *argv[])
       csmaHelper.EnablePcap ("client", clientDevices);
     }
 
-  // Creating NetAnim output file
+  /*// Creating NetAnim output file
   AnimationInterface anim ("qosctrl-netanim.xml");
   anim.SetStartTime (Seconds (0));
   anim.SetStopTime (Seconds (4));
 
-  /*// Set NetAnim node descriptions
+  // Set NetAnim node descriptions
   anim.UpdateNodeDescription (0, "Server 0");
   anim.UpdateNodeDescription (1, "Server 1");
   anim.UpdateNodeDescription (2, "Border switch");
@@ -352,10 +394,14 @@ main (int argc, char *argv[])
   // Dump total of received bytes by sink applications
   Ptr<PacketSink> sink1 = DynamicCast<PacketSink> (sinkApps.Get (0));
   Ptr<PacketSink> sink2 = DynamicCast<PacketSink> (sinkApps.Get (1));
+  Ptr<PacketSink> sink3 = DynamicCast<PacketSink> (sinkApps.Get (2));
   std::cout << "Bytes received by server 1: " << sink1->GetTotalRx () << " ("
             << (8. * sink1->GetTotalRx ()) / 1000000 / simTime << " Mbps)"
             << std::endl;
   std::cout << "Bytes received by server 2: " << sink2->GetTotalRx () << " ("
             << (8. * sink2->GetTotalRx ()) / 1000000 / simTime << " Mbps)"
+            << std::endl;
+  std::cout << "Bytes received by server 3: " << sink3->GetTotalRx () << " ("
+            << (8. * sink3->GetTotalRx ()) / 1000000 / simTime << " Mbps)"
             << std::endl;
 }

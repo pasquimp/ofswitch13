@@ -161,7 +161,7 @@ private:
   DataRate  m_meterRate;          //!< Per-flow meter rate
   bool      m_linkAggregation;    //!< Enable link aggregation
   bool      m_SlinkAggregation;   //!< Enable link aggregation on servers side
-
+  bool      routeUp;                    //!< If enabled tests the edge server
   /** Map saving <IPv4 address / MAC address> */
   typedef std::map<Ipv4Address, Mac48Address> IpMacMap_t;
   IpMacMap_t m_arpTable;          //!< ARP resolution table.
