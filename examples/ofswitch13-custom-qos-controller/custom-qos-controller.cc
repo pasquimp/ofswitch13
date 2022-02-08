@@ -288,12 +288,12 @@ CustomQosController::ConfigureBorderSwitch (Ptr<const RemoteSwitch> swtch)
 }
 
 void
-CustomQosController::ConfigureAggregationSwitch (Ptr<const RemoteSwitch> swtch)
+CustomQosController::RouteUpFunction ()
 {
-  NS_LOG_FUNCTION (this << swtch);
-  if(routeUp)
-  {
-      // For packet-in messages, send only the first 128 bytes to the controller
+      routeUp = true;
+      std::cout << "We are now rotating traffic towards Edge server" << std::endl;
+      Ptr<const RemoteSwitch> swtch = m_aggSwitch; 
+        // For packet-in messages, send only the first 128 bytes to the controller
       DpctlExecute (swtch, "set-config miss=128");
 
       // Redirect ARP requests to the controller
@@ -301,19 +301,19 @@ CustomQosController::ConfigureAggregationSwitch (Ptr<const RemoteSwitch> swtch)
                     "eth_type=0x0806,arp_op=1 apply:output=ctrl");
       
       // group 3 towards clients
-      DpctlExecute (swtch, "group-mod cmd=add,type=ind,group=3 "
+      DpctlExecute (swtch, "group-mod cmd=add,type=ind,group=30 "
                     "weight=0,port=any,group=any set_field=ip_src:10.1.1.1"
                     ",set_field=eth_src:00:00:00:00:00:01,output=3");
 
-      DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=700 "
-                    "in_port=5,eth_type=0x0800 apply:group=3");
-      DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=700 "
-                    "in_port=6,eth_type=0x0800 apply:group=3");
+      DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=770 "
+                    "in_port=5,eth_type=0x0800 apply:group=30");
+      DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=770 "
+                    "in_port=6,eth_type=0x0800 apply:group=30");
       
       // group 1 towards server
       if (m_SlinkAggregation)
         {
-          DpctlExecute (swtch, "group-mod cmd=add,type=sel,group=1 "
+          DpctlExecute (swtch, "group-mod cmd=add,type=sel,group=10 "
                         "weight=1,port=any,group=any set_field=ip_dst:10.1.1.4,"
                         "set_field=eth_dst:00:00:00:00:00:1c,output=5 "
                         "weight=1,port=any,group=any set_field=ip_dst:10.1.1.4,"
@@ -321,21 +321,27 @@ CustomQosController::ConfigureAggregationSwitch (Ptr<const RemoteSwitch> swtch)
         }
       else
         {
-          DpctlExecute (swtch, "group-mod cmd=add,type=ind,group=1 "
+          DpctlExecute (swtch, "group-mod cmd=add,type=ind,group=10 "
                         "weight=0,port=any,group=any set_field=ip_dst:10.1.1.4,"
                         "set_field=eth_dst:00:00:00:00:00:1c,output=5");
         }
       
-      DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
-                    "in_port=3,eth_type=0x0800 write:group=1");
+      DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=550 "
+                    "in_port=3,eth_type=0x0800 write:group=10");
 
       // Incoming TCP connections (ports 1 and 2) are sent to the controller
-      DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
+      DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=550 "
                     "in_port=3,eth_type=0x0800,ip_dst=10.1.1.1,"
                     "eth_dst=00:00:00:00:00:01 apply:output=ctrl");
-  }
-  else
-  {
+}
+
+
+void
+CustomQosController::ConfigureAggregationSwitch (Ptr<const RemoteSwitch> swtch)
+{
+  NS_LOG_FUNCTION (this << swtch);
+  m_aggSwitch = swtch;
+
   if (m_linkAggregation)
     {
       // Configure Group #1 for aggregating links 1 and 2
@@ -361,7 +367,56 @@ CustomQosController::ConfigureAggregationSwitch (Ptr<const RemoteSwitch> swtch)
   // Packets from input port 3 are redirected to group 1
   DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
                 "in_port=3 write:group=1");
+
+  if(routeUp)
+  {
+    RouteUpFunction ();
   }
+}
+
+void
+CustomQosController::DisableRouteUp ()
+{
+
+      routeUp = false;
+      std::cout << "We are now rotating traffic towards Core server" << std::endl;
+      Ptr<const RemoteSwitch> swtch = m_aggSwitch; 
+        // For packet-in messages, send only the first 128 bytes to the controller
+      //DpctlExecute (swtch, "set-config miss=128");
+
+      // Redirect ARP requests to the controller
+      DpctlExecute (swtch, "flow-mod cmd=del,table=0,prio=20 "
+                    "eth_type=0x0806,arp_op=1");
+      
+      // group 3 towards clients
+      DpctlExecute (swtch, "group-mod cmd=del,group=30 "
+                    );
+
+      DpctlExecute (swtch, "flow-mod cmd=del,table=0,prio=770 "
+                    "in_port=5,eth_type=0x0800");
+      DpctlExecute (swtch, "flow-mod cmd=del,table=0,prio=770 "
+                    "in_port=6,eth_type=0x0800");
+      
+      // group 1 towards server
+      if (m_SlinkAggregation)
+        {
+          DpctlExecute (swtch, "group-mod cmd=del,group=10 "
+                        );
+        }
+      else
+        {
+          DpctlExecute (swtch, "group-mod cmd=del,group=10 "
+                        );
+        }
+      
+      DpctlExecute (swtch, "flow-mod cmd=del,table=0,prio=550 "
+                    "in_port=3,eth_type=0x0800");
+
+      // Incoming TCP connections (ports 1 and 2) are sent to the controller
+      DpctlExecute (swtch, "flow-mod cmd=del,table=0,prio=550 "
+                    "in_port=3,eth_type=0x0800,ip_dst=10.1.1.1,"
+                    "eth_dst=00:00:00:00:00:01");
+
 }
 
 void

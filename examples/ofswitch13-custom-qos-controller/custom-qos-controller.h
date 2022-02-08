@@ -55,6 +55,9 @@ public:
     struct ofl_msg_packet_in *msg, Ptr<const RemoteSwitch> swtch,
     uint32_t xid);
 
+  void RouteUpFunction ();
+  void DisableRouteUp ();
+
 protected:
   // Inherited from OFSwitch13Controller
   void HandshakeSuccessful (Ptr<const RemoteSwitch> swtch);
@@ -165,6 +168,7 @@ private:
   /** Map saving <IPv4 address / MAC address> */
   typedef std::map<Ipv4Address, Mac48Address> IpMacMap_t;
   IpMacMap_t m_arpTable;          //!< ARP resolution table.
+  Ptr<const RemoteSwitch> m_aggSwitch;
 };
 
 #endif /* CUSTOM_QOS_CONTROLLER_H */

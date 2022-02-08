@@ -59,20 +59,20 @@
 #include <ns3/internet-apps-module.h>
 
 using namespace ns3;
-/*
+
 static void PingRtt (std::string context, Time rtt)
 {
   std::cout << context << "=" << rtt.GetMilliSeconds () << " ms" << std::endl;
 }
-*/
+
 int
 main (int argc, char *argv[])
 {
   ofs::EnableLibraryLog (true, "switchlog");
 
-  uint16_t clients = 2;
+  uint16_t clients = 1;
   uint16_t servers = 3;
-  uint16_t simTime = 10;
+  uint16_t simTime = 20;
   bool verbose = false;
   bool trace = false;
 
@@ -148,6 +148,7 @@ main (int argc, char *argv[])
   // Create two 10Mbps connections between border and aggregation switches
   CsmaHelper csmaHelper;
   csmaHelper.SetChannelAttribute ("DataRate", DataRateValue (DataRate ("10Mbps")));
+  csmaHelper.SetChannelAttribute ("Delay", TimeValue (MilliSeconds (1)));
 
   link = csmaHelper.Install (NodeContainer (switchNodes.Get (0), switchNodes.Get (1)));
   switch0Ports.Add (link.Get (0)); // 1
@@ -159,6 +160,7 @@ main (int argc, char *argv[])
 
   // Configure the CsmaHelper for 100Mbps connections
   csmaHelper.SetChannelAttribute ("DataRate", DataRateValue (DataRate ("100Mbps")));
+  csmaHelper.SetChannelAttribute ("Delay", TimeValue (MilliSeconds (0)));
 
   // Connect aggregation switch to client switch
   link = csmaHelper.Install (NodeContainer (switchNodes.Get (1), switchNodes.Get (2)));
@@ -294,7 +296,7 @@ main (int argc, char *argv[])
   Ipv4Address serverAddr ("10.1.1.1");
 
   // Installing a sink application at server nodes
-  PacketSinkHelper sinkHelper ("ns3::TcpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), 9));
+  PacketSinkHelper sinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), 9));
   ApplicationContainer sinkApps = sinkHelper.Install (serverNodes);
   sinkApps.Start (Seconds (0));
 
@@ -302,7 +304,7 @@ main (int argc, char *argv[])
   //BulkSendHelper senderHelper ("ns3::TcpSocketFactory", InetSocketAddress (serverAddr, 9));
   //ApplicationContainer senderApps = senderHelper.Install (clientNodes);
 
-  OnOffHelper onOffHelper ("ns3::TcpSocketFactory", Address ());
+  OnOffHelper onOffHelper ("ns3::UdpSocketFactory", Address ());
   onOffHelper.SetAttribute ("Remote", AddressValue (InetSocketAddress (serverAddr, 9)));
   onOffHelper.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1]"));
   onOffHelper.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
@@ -321,10 +323,11 @@ main (int argc, char *argv[])
     }
 
   // Configure and install ping
-  //V4PingHelper ping = V4PingHelper (serverAddr);
- // ping.Install (clientNodes.Get(0));
+  V4PingHelper ping = V4PingHelper (serverAddr);
+  ping.SetAttribute ("Interval", TimeValue (MilliSeconds (100)));
+  ping.Install (clientNodes.Get(0));
 
-  //Config::Connect ("/NodeList/*/ApplicationList/*/$ns3::V4Ping/Rtt", MakeCallback (&PingRtt));
+  Config::Connect ("/NodeList/*/ApplicationList/*/$ns3::V4Ping/Rtt", MakeCallback (&PingRtt));
 
   // Enable pcap traces and datapath stats
   if (trace)
@@ -387,7 +390,9 @@ main (int argc, char *argv[])
     }*/
 
   // Run the simulation
-  Simulator::Schedule (Seconds (5), &CustomQosController::SetAttribute, qosCtrl, "EnableEdgeServer", BooleanValue (true));
+  Simulator::Schedule (Seconds (5), &CustomQosController::RouteUpFunction, qosCtrl);
+
+  Simulator::Schedule (Seconds (15), &CustomQosController::DisableRouteUp, qosCtrl);
 
   Simulator::Stop (Seconds (simTime));
   Simulator::Run ();
@@ -397,13 +402,13 @@ main (int argc, char *argv[])
   Ptr<PacketSink> sink1 = DynamicCast<PacketSink> (sinkApps.Get (0));
   Ptr<PacketSink> sink2 = DynamicCast<PacketSink> (sinkApps.Get (1));
   Ptr<PacketSink> sink3 = DynamicCast<PacketSink> (sinkApps.Get (2));
-  std::cout << "Bytes received by server 1: " << sink1->GetTotalRx () << " ("
+  std::cout << "Bytes received by server 1 (core): " << sink1->GetTotalRx () << " ("
             << (8. * sink1->GetTotalRx ()) / 1000000 / simTime << " Mbps)"
             << std::endl;
-  std::cout << "Bytes received by server 2: " << sink2->GetTotalRx () << " ("
+  std::cout << "Bytes received by server 2 (core): " << sink2->GetTotalRx () << " ("
             << (8. * sink2->GetTotalRx ()) / 1000000 / simTime << " Mbps)"
             << std::endl;
-  std::cout << "Bytes received by server 3: " << sink3->GetTotalRx () << " ("
+  std::cout << "Bytes received by server 3 (edge): " << sink3->GetTotalRx () << " ("
             << (8. * sink3->GetTotalRx ()) / 1000000 / simTime << " Mbps)"
             << std::endl;
 }
