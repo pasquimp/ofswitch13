@@ -59,12 +59,12 @@
 #include <ns3/internet-apps-module.h>
 
 using namespace ns3;
-
+/*
 static void PingRtt (std::string context, Time rtt)
 {
   std::cout << context << "=" << rtt.GetMilliSeconds () << " ms" << std::endl;
 }
-
+*/
 int
 main (int argc, char *argv[])
 {
@@ -178,7 +178,7 @@ main (int argc, char *argv[])
   csmaHelper.SetChannelAttribute ("DataRate", DataRateValue (DataRate ("10Mbps")));
 
   link = csmaHelper.Install (NodeContainer (switchNodes.Get (0), switchNodes.Get (4)));
-  switch0Ports.Add (link.Get (0));
+  switch0Ports.Add (link.Get (0)); // 01
   switch4Ports.Add (link.Get (1));
 
   link = csmaHelper.Install (NodeContainer (switchNodes.Get (0), switchNodes.Get (5)));
@@ -321,10 +321,10 @@ main (int argc, char *argv[])
     }
 
   // Configure and install ping
-  V4PingHelper ping = V4PingHelper (serverAddr);
-  ping.Install (clientNodes.Get(0));
+  //V4PingHelper ping = V4PingHelper (serverAddr);
+ // ping.Install (clientNodes.Get(0));
 
-  Config::Connect ("/NodeList/*/ApplicationList/*/$ns3::V4Ping/Rtt", MakeCallback (&PingRtt));
+  //Config::Connect ("/NodeList/*/ApplicationList/*/$ns3::V4Ping/Rtt", MakeCallback (&PingRtt));
 
   // Enable pcap traces and datapath stats
   if (trace)
@@ -387,6 +387,8 @@ main (int argc, char *argv[])
     }*/
 
   // Run the simulation
+  Simulator::Schedule (Seconds (5), &CustomQosController::SetAttribute, qosCtrl, "EnableEdgeServer", BooleanValue (true));
+
   Simulator::Stop (Seconds (simTime));
   Simulator::Run ();
   Simulator::Destroy ();

@@ -59,7 +59,7 @@ CustomQosController::GetTypeId (void)
                    MakeBooleanChecker ())
     .AddAttribute ("EnableEdgeServer",
                    "Enable Edge-Server1",
-                   BooleanValue (true),
+                   BooleanValue (false),
                    MakeBooleanAccessor (&CustomQosController::routeUp),
                    MakeBooleanChecker ())
     .AddAttribute ("MeterRate",
@@ -165,6 +165,7 @@ CustomQosController::HandlePacketIn (
       if (ethType == ArpL3Protocol::PROT_NUMBER)
         {
           // ARP packet
+          //std::cout << "ARP packet to be saved "<< std::endl;
           return HandleArpPacketIn (msg, swtch, xid);
         }
       else if (ethType == Ipv4L3Protocol::PROT_NUMBER)
@@ -320,13 +321,13 @@ CustomQosController::ConfigureAggregationSwitch (Ptr<const RemoteSwitch> swtch)
         }
       else
         {
-          DpctlExecute (swtch, "group-mod cmd=add,type=sel,group=1 "
-                        "weight=0,port=any,group=any set_field=ip_dst:10.1.1.4"
-                        ",set_field=eth_dst:00:00:00:00:00:1c,output=5");
+          DpctlExecute (swtch, "group-mod cmd=add,type=ind,group=1 "
+                        "weight=0,port=any,group=any set_field=ip_dst:10.1.1.4,"
+                        "set_field=eth_dst:00:00:00:00:00:1c,output=5");
         }
       
       DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
-                    "in_port=3 write:group=1");
+                    "in_port=3,eth_type=0x0800 write:group=1");
 
       // Incoming TCP connections (ports 1 and 2) are sent to the controller
       DpctlExecute (swtch, "flow-mod cmd=add,table=0,prio=500 "
@@ -433,6 +434,7 @@ CustomQosController::HandleArpPacketIn (
   Ipv4Address srcIp, dstIp;
   srcIp = ExtractIpv4Address (OXM_OF_ARP_SPA, (struct ofl_match*)msg->match);
   dstIp = ExtractIpv4Address (OXM_OF_ARP_TPA, (struct ofl_match*)msg->match);
+  //std::cout << srcIp << " " << dstIp << std::endl;
 
   // Get Source MAC address
   Mac48Address srcMac, dstMac;
@@ -441,6 +443,8 @@ CustomQosController::HandleArpPacketIn (
   tlv = oxm_match_lookup (OXM_OF_ARP_THA, (struct ofl_match*)msg->match);
   dstMac.CopyFrom (tlv->value);
 
+  SaveArpEntry (srcIp, srcMac);
+  
   // Check for ARP request
   if (arpOp == ArpHeader::ARP_TYPE_REQUEST)
     {
@@ -545,6 +549,8 @@ CustomQosController::HandleConnectionRequest (
     }
   
   // Create an ARP request for further address resolution
+  //std::cout << "ARP resolutions " << srcIp << " " << srcMac << std::endl;
+
   SaveArpEntry (srcIp, srcMac);
   uint8_t replyData[64];
   Ptr<Packet> pkt = CreateArpRequest (serverMac, serverIp, srcIp);
@@ -780,6 +786,7 @@ CustomQosController::SaveArpEntry (Ipv4Address ipAddr, Mac48Address macAddr)
 Mac48Address
 CustomQosController::GetArpEntry (Ipv4Address ip)
 {
+
   IpMacMap_t::iterator ret;
   ret = m_arpTable.find (ip);
   if (ret != m_arpTable.end ())
@@ -787,6 +794,6 @@ CustomQosController::GetArpEntry (Ipv4Address ip)
       NS_LOG_INFO ("Found ARP entry: " << ip << " - " << ret->second);
       return ret->second;
     }
-  NS_ABORT_MSG ("No ARP information for this IP.");
+  NS_ABORT_MSG ("No ARP information for this IP "<< ip);
 }
 
