@@ -22,6 +22,7 @@
 #define QUEUE_TAG_H
 
 #include <ns3/tag.h>
+#include "ns3/simulator.h"
 
 namespace ns3 {
 
@@ -48,7 +49,7 @@ public:
    * Complete constructor.
    * \param id The queue id.
    */
-  QueueTag (uint32_t id);
+//  QueueTag (uint32_t id);
 
   /**
    * Set the internal queue id.
@@ -59,6 +60,12 @@ public:
   /** \return The queue id */
   uint32_t GetQueueId (void) const;
 
+  QueueTag (uint32_t id, Time enqueueTime);
+
+  void SetEnqueueTime (Time enqueueTime);
+
+  Time GetEnqueueTime (void) const;
+
   // Inherited from Tag
   virtual void Serialize (TagBuffer i) const;
   virtual void Deserialize (TagBuffer i);
@@ -67,6 +74,7 @@ public:
 
 private:
   uint32_t m_queueId;   //!< Packet sequence number
+  Time m_enqueueTime;
 };
 
 } // namespace ns3

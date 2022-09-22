@@ -31,8 +31,14 @@ QueueTag::QueueTag ()
 {
 }
 
-QueueTag::QueueTag (uint32_t id)
+/*QueueTag::QueueTag (uint32_t id)
   : m_queueId (id)
+{
+}*/
+
+QueueTag::QueueTag (uint32_t id, Time enqueueTime)
+  : m_queueId (id),
+    m_enqueueTime (enqueueTime)
 {
 }
 
@@ -63,6 +69,18 @@ uint32_t
 QueueTag::GetQueueId (void) const
 {
   return m_queueId;
+}
+
+void
+QueueTag::SetEnqueueTime (Time enqueueTime)
+{
+  m_enqueueTime = enqueueTime;
+}
+
+Time
+QueueTag::GetEnqueueTime (void) const
+{
+  return m_enqueueTime;
 }
 
 uint32_t
