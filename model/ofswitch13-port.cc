@@ -377,7 +377,7 @@ OFSwitch13Port::Send (Ptr<const Packet> packet, uint32_t queueNo,
   packetCopy->RemoveHeader (header);
 
   // Tagging the packet with queue and tunnel ids.
-  QueueTag queueTag (queueNo);
+  QueueTag queueTag (queueNo, Simulator::Now ());
   packetCopy->ReplacePacketTag (queueTag);
   NS_LOG_DEBUG ("Pkt queue will be " << queueNo);
 

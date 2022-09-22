@@ -72,7 +72,7 @@ OFSwitch13Queue::Enqueue (Ptr<Packet> packet)
   packet->PeekPacketTag (queueTag);
   int queueId = static_cast<int> (queueTag.GetQueueId ());
   NS_ASSERT_MSG (queueId < GetNQueues (), "Queue ID is out of range.");
-  NS_LOG_DEBUG ("Packet to be enqueued in queue " << queueId);
+  NS_LOG_DEBUG ("Packet to be enqueued in queue " << queueId << " at time " << queueTag.GetEnqueueTime ());
 
   struct sw_queue *swQueue;
   swQueue = dp_ports_lookup_queue (m_swPort, queueId);
@@ -194,6 +194,11 @@ void
 OFSwitch13Queue::NotifyDequeue (Ptr<Packet> packet)
 {
   NS_LOG_FUNCTION (this << packet);
+
+  QueueTag queueTag;
+  packet->PeekPacketTag (queueTag);
+  int queueId = static_cast<int> (queueTag.GetQueueId ());
+  NS_LOG_DEBUG ("Packet dequeued from queue " << queueId << ", time in queue " << Simulator::Now () - queueTag.GetEnqueueTime ());
 
   // Dequeue the packet from this queue too. As we don't know the
   // exactly packet location on this queue, we have to look for it.
