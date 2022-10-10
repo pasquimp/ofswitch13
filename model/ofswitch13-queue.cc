@@ -200,6 +200,16 @@ OFSwitch13Queue::NotifyDequeue (Ptr<Packet> packet)
   int queueId = static_cast<int> (queueTag.GetQueueId ());
   NS_LOG_DEBUG ("Packet dequeued from queue " << queueId << ", time in queue " << Simulator::Now () - queueTag.GetEnqueueTime ());
 
+  Time prevSample = Seconds (0);
+  if (m_timeInQueue.find (queueId) != m_timeInQueue.end ())
+    {
+      prevSample = m_timeInQueue.at (queueId);
+    }
+  Time currSample = Simulator::Now () - queueTag.GetEnqueueTime ();
+  Time sample = 0.3 * prevSample + 0.7 * currSample;
+
+  m_timeInQueue.insert(std::make_pair(queueId, sample));
+
   // Dequeue the packet from this queue too. As we don't know the
   // exactly packet location on this queue, we have to look for it.
   for (auto it = begin (); it != end (); it++)

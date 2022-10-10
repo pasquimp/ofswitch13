@@ -86,6 +86,9 @@ public:
    */
   void SetPortStruct (struct sw_port *port);
 
+  // map queueId, lastTimeInQueueSample
+  std::map<int, Time> m_timeInQueue;
+
 protected:
   /** Destructor implementation. */
   virtual void DoDispose ();
