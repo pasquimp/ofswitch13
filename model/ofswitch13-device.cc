@@ -447,6 +447,16 @@ OFSwitch13Device::GetSwitchPort (uint32_t no) const
 }
 
 void
+OFSwitch13Device::FillPerPortMap ()
+{
+  for (uint32_t i = 0; i < m_ports.size (); i++)
+    {
+      std::map <int, Time> temp = m_ports.at (i)->GetPortQueue ()->m_timeInQueue;
+      m_perPortMap [i] = temp;
+    }
+}
+
+void
 OFSwitch13Device::ReceiveFromSwitchPort (Ptr<Packet> packet, uint32_t portNo,
                                          uint64_t tunnelId)
 {

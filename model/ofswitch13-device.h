@@ -222,6 +222,8 @@ public:
    */
   Ptr<OFSwitch13Port> GetSwitchPort (uint32_t no) const;
 
+  void FillPerPortMap ();
+
   /**
    * Called when a packet is received on one of the switch's ports. This method
    * will schedule the packet for OpenFlow pipeline.
@@ -691,6 +693,10 @@ private:
    * get the object pointer and call member functions.
    */
   static DpIdDevMap_t m_globalSwitchMap;
+
+public:
+  // portId, (queueId, timeInQueue)
+  std::map<uint32_t, std::map<int, Time> > m_perPortMap;
 
 }; // Class OFSwitch13Device
 
